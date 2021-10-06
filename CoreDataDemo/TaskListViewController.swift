@@ -16,7 +16,7 @@ class TaskListViewController: UITableViewController {
     private let context = (TaskStorageManager.shared.persistentContainer.viewContext)
     private let cellID = "task"
     private var taskList: [Task] = []
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .white
@@ -24,7 +24,7 @@ class TaskListViewController: UITableViewController {
         setupNavigationBar()
         fetchData()
     }
-
+    
     private func setupNavigationBar() {
         title = "Task List"
         navigationController?.navigationBar.prefersLargeTitles = true
@@ -83,13 +83,13 @@ class TaskListViewController: UITableViewController {
     
     private func showAlertForEdit(with title: String, and message: String, and taskForCell: Task ) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        let saveAction = UIAlertAction(title: "Save", style: .default) { _ in
-            guard let task = alert.textFields?.first?.text, !task.isEmpty else { return }
-            self.edit(task) // доработать метод edit  и добавить удаление старой ячейки
+        let editAction = UIAlertAction(title: "Save", style: .default) { _ in
+            guard let taskName = alert.textFields?.first?.text  else { return }
+            self.edit(task: taskForCell, with: taskName)
         }
-        let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
         
-        alert.addAction(saveAction)
+        let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
+        alert.addAction(editAction)
         alert.addAction(cancelAction)
         alert.addTextField { textField in
             textField.text = taskForCell.title
@@ -128,11 +128,26 @@ class TaskListViewController: UITableViewController {
         }
     }
     
-    private func edit(_ taskName: String) {
-        guard let entityDescription = NSEntityDescription.entity(forEntityName: "Task", in: context) else { return }
-        guard let task = NSManagedObject(entity: entityDescription, insertInto: context) as? Task else { return }
-        task.title = taskName
-
+    private func edit(task: Task, with taskName: String) {
+        let fetchRequest = Task.fetchRequest()
+        
+        guard let cellIndex = tableView.indexPathForSelectedRow else {return}
+        tableView.reloadRows(at: [cellIndex], with: .automatic)
+        reloadData()
+        
+        fetchRequest.predicate = NSPredicate(format: "title = %@", task.title!)
+        do {
+            guard let task = try context.fetch(fetchRequest).first else {
+                print("Couldn't find a task with provided title.")
+                return
+            }
+            
+            task.setValue(taskName, forKey: "title")
+        }
+        catch let error {
+            print(error)
+        }
+        
         if context.hasChanges {
             do {
                 try context.save()
@@ -160,23 +175,25 @@ extension TaskListViewController {
     }
     
     override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-    
-    let task = taskList[indexPath.row]
-    let deleteAction = UIContextualAction(style: .destructive, title: "Delete") {  (contextualAction, view, boolValue) in
         
-        self.taskList.remove(at: indexPath.row)
-        tableView.deleteRows(at: [indexPath], with: .automatic)
+        let task = taskList[indexPath.row]
+        let deleteAction = UIContextualAction(style: .destructive, title: "Delete") {  (contextualAction, view, boolValue) in
+            
+            self.taskList.remove(at: indexPath.row)
+            tableView.deleteRows(at: [indexPath], with: .automatic)
+            
+            self.delete(task)
+            print(task)
+        }
+        let swipeActions = UISwipeActionsConfiguration(actions: [deleteAction])
         
-        self.delete(task)
-        print(task)
+        return swipeActions
     }
-    let swipeActions = UISwipeActionsConfiguration(actions: [deleteAction])
-
-    return swipeActions
-}
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let task = taskList[indexPath.row]
+        print(task)
         showAlertForEdit(with: "Update Task", and: "What do you want to do?", and: task)
+        
     }
 }
 
