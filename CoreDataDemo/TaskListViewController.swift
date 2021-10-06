@@ -13,7 +13,7 @@ protocol TaskViewControllerDelegate {
 }
 
 class TaskListViewController: UITableViewController {
-    private let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    private let context = (TaskStorageManager.shared.persistentContainer.viewContext)
     private let cellID = "task"
     private var taskList: [Task] = []
 
@@ -81,6 +81,23 @@ class TaskListViewController: UITableViewController {
         present(alert, animated: true)
     }
     
+    private func showAlertForEdit(with title: String, and message: String, and taskForCell: Task ) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        let saveAction = UIAlertAction(title: "Save", style: .default) { _ in
+            guard let task = alert.textFields?.first?.text, !task.isEmpty else { return }
+            self.edit(task) // доработать метод edit  и добавить удаление старой ячейки
+        }
+        let cancelAction = UIAlertAction(title: "Cancel", style: .destructive)
+        
+        alert.addAction(saveAction)
+        alert.addAction(cancelAction)
+        alert.addTextField { textField in
+            textField.text = taskForCell.title
+        }
+        present(alert, animated: true)
+    }
+    
+    
     private func save(_ taskName: String) {
         guard let entityDescription = NSEntityDescription.entity(forEntityName: "Task", in: context) else { return }
         guard let task = NSManagedObject(entity: entityDescription, insertInto: context) as? Task else { return }
@@ -98,7 +115,34 @@ class TaskListViewController: UITableViewController {
             }
         }
     }
+    
+    private func delete(_ task: Task) {
+        context.delete(task)
+        
+        if context.hasChanges {
+            do {
+                try context.save()
+            } catch let error {
+                print(error)
+            }
+        }
+    }
+    
+    private func edit(_ taskName: String) {
+        guard let entityDescription = NSEntityDescription.entity(forEntityName: "Task", in: context) else { return }
+        guard let task = NSManagedObject(entity: entityDescription, insertInto: context) as? Task else { return }
+        task.title = taskName
+
+        if context.hasChanges {
+            do {
+                try context.save()
+            } catch let error {
+                print(error)
+            }
+        }
+    }
 }
+
 
 // MARK: - UITableViewDataSource
 extension TaskListViewController {
@@ -113,6 +157,26 @@ extension TaskListViewController {
         content.text = task.title
         cell.contentConfiguration = content
         return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+    
+    let task = taskList[indexPath.row]
+    let deleteAction = UIContextualAction(style: .destructive, title: "Delete") {  (contextualAction, view, boolValue) in
+        
+        self.taskList.remove(at: indexPath.row)
+        tableView.deleteRows(at: [indexPath], with: .automatic)
+        
+        self.delete(task)
+        print(task)
+    }
+    let swipeActions = UISwipeActionsConfiguration(actions: [deleteAction])
+
+    return swipeActions
+}
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let task = taskList[indexPath.row]
+        showAlertForEdit(with: "Update Task", and: "What do you want to do?", and: task)
     }
 }
 
